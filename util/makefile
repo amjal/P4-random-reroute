@@ -1,0 +1,26 @@
+BUILD_DIR = build
+PCAP_DIR = pcaps
+LOG_DIR = logs
+
+P4C = p4c-bm2-ss
+P4C_ARGS += --p4runtime-files $(BUILD_DIR)/$(basename $@).p4.p4info.txt
+source = $(basename $(wildcard *.p4))
+
+
+all: run
+
+run: build
+	sudo python3 $(run_script) -t $(TOPO) -j $(BUILD_DIR)/$(source).json -b simple_switch_grpc 
+all: 
+	echo $(source)
+
+build: dirs $(source).json
+
+$(source).json: $(source).p4
+	$(P4C) --p4v 16 $(P4C_ARGS) -o $(BUILD_DIR)/$@ $<
+
+dirs: 
+	mkdir -p $(BUILD_DIR) $(PCAP_DIR) $(LOG_DIR)
+
+stop:
+	sudo mn -c
