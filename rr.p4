@@ -2,8 +2,12 @@
 #include <core.p4>
 #include <v1model.p4>
 
+
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_ARP = 0x0806;
+const bit<32> WEAK_THRESHOLD = 10;
+
+#define MAX_PORTS 4
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -13,6 +17,9 @@ typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
 typedef bit<32> ip4Addr_t;
 
+
+// Define global register accessible by both ingress and egress controls
+register<bit<32>> (MAX_PORTS) qdepths;
 header ethernet_t {
     macAddr_t dstAddr;
     macAddr_t srcAddr;
@@ -35,7 +42,6 @@ header ipv4_t {
 }
 
 struct metadata {
-    /* empty */
 }
 
 struct headers {
@@ -53,7 +59,6 @@ parser MyParser(packet_in packet,
                 inout standard_metadata_t standard_metadata) {
 
     state start {
-        /* TODO: add parser logic */
 		transition parse_ethernet;
     }
 
@@ -61,7 +66,7 @@ parser MyParser(packet_in packet,
 		packet.extract(hdr.ethernet);
 		transition select (hdr.ethernet.etherType) {
 			TYPE_IPV4: parse_ipv4;
-		  	default: accept;
+			default: accept;
 		}
 	}
 	state parse_ipv4{
@@ -92,11 +97,19 @@ control MyIngress(inout headers hdr,
     }
 
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
-		standard_metadata.egress_spec = port;
+		bit<32> spec_qdepth;
+		egressSpec_t randomPort;
+		qdepths.read(spec_qdepth, (bit<32>) port);
+		random<bit<9>>(randomPort, 1, MAX_PORTS);
+		if (spec_qdepth > WEAK_THRESHOLD){
+			standard_metadata.egress_spec = randomPort;
+		}
+		else{
+			standard_metadata.egress_spec = port;
+		}
 		hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
 		hdr.ethernet.dstAddr = dstAddr;
 		hdr.ipv4.ttl = hdr.ipv4.ttl -1;
-        /* TODO: fill out code in action body */
     }
 
     table ipv4_lpm {
@@ -148,7 +161,9 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    apply {  }
+    apply {
+		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.enq_qdepth);
+	}
 }
 
 /*************************************************************************
@@ -182,7 +197,6 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
-        /* TODO: add deparser logic */
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
     }
