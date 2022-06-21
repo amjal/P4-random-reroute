@@ -6,6 +6,8 @@
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_ARP = 0x0806;
 const bit<32> WEAK_THRESHOLD = 30;
+const bit<5> IPV4_OPTION_RR = 31;
+const bit<8> MAX_HOP = 2;
 
 #define MAX_PORTS 4
 
@@ -41,12 +43,25 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header ipv4_option_t {
+	bit<1> copyFlag;
+	bit<2> optClass;
+	bit<5> option;
+	bit<8> optionLength;
+}
+
+header rr_count_t {
+	bit<8> counter;
+}
+
 struct metadata {
 }
 
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
+	ipv4_option_t ipv4_option;
+	rr_count_t rr_count;
 }
 
 /*************************************************************************
@@ -71,8 +86,23 @@ parser MyParser(packet_in packet,
 	}
 	state parse_ipv4{
 		packet.extract(hdr.ipv4);
+		transition select (hdr.ipv4.ihl){
+			5: 			accept;
+			default: 	parse_ipv4_option;
+		}
+	}
+	state parse_ipv4_option{
+		packet.extract(hdr.ipv4_option);
+		transition select( hdr.ipv4_option.option){
+			IPV4_OPTION_RR: parse_rr;
+			default: accept;
+		}
+	}
+	state parse_rr{
+		packet.extract(hdr.rr_count);
 		transition accept;
 	}
+
 }
 
 
@@ -102,7 +132,10 @@ control MyIngress(inout headers hdr,
 		qdepths.read(spec_qdepth, (bit<32>) port);
 		random<bit<9>>(randomPort, 1, MAX_PORTS);
 		if (spec_qdepth > WEAK_THRESHOLD){
+			// Do random rerouting
 			standard_metadata.egress_spec = randomPort;
+			// Increase random reroute hop count
+			hdr.rr_count.counter = hdr.rr_count.counter +1;
 		}
 		else{
 			standard_metadata.egress_spec = port;
@@ -147,7 +180,9 @@ control MyIngress(inout headers hdr,
 	}
 
     apply {
-		if (hdr.ethernet.etherType == TYPE_IPV4)
+		if (hdr.rr_count.counter > MAX_HOP)
+			drop();
+		else if (hdr.ethernet.etherType == TYPE_IPV4)
 			ipv4_lpm.apply();
 		else if (hdr.ethernet.etherType == TYPE_ARP)
 			mac_lookup.apply();
@@ -162,7 +197,8 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
     apply {
-		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.enq_qdepth);
+		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.deq_qdepth);
+
 	}
 }
 
