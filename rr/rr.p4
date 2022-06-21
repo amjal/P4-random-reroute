@@ -5,7 +5,7 @@
 
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_ARP = 0x0806;
-const bit<32> WEAK_THRESHOLD = 10;
+const bit<32> WEAK_THRESHOLD = 30;
 
 #define MAX_PORTS 4
 
