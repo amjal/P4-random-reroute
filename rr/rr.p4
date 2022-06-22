@@ -7,7 +7,7 @@ const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_ARP = 0x0806;
 const bit<32> WEAK_THRESHOLD = 30;
 const bit<5> IPV4_OPTION_RR = 31;
-const bit<8> MAX_HOP = 2;
+const bit<8> MAX_HOP = 12;
 
 #define MAX_PORTS 4
 
@@ -197,7 +197,7 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
     apply {
-		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.deq_qdepth);
+		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.enq_qdepth);
 
 	}
 }
@@ -235,6 +235,8 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
+		packet.emit(hdr.ipv4_option);
+		packet.emit(hdr.rr_count);
     }
 }
 
