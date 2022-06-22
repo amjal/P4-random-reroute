@@ -129,7 +129,7 @@ control MyIngress(inout headers hdr,
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
 		bit<32> spec_qdepth;
 		egressSpec_t randomPort;
-		qdepths.read(spec_qdepth, (bit<32>) port);
+		qdepths.read(spec_qdepth, (bit<32>) port -1);
 		random<bit<9>>(randomPort, 1, MAX_PORTS);
 		if (spec_qdepth > WEAK_THRESHOLD){
 			// Do random rerouting
@@ -197,7 +197,7 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
     apply {
-		qdepths.write((bit<32>)standard_metadata.egress_port, (bit<32>)standard_metadata.enq_qdepth);
+		qdepths.write((bit<32>)standard_metadata.egress_port -1, (bit<32>)standard_metadata.enq_qdepth);
 
 	}
 }

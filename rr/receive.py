@@ -16,6 +16,7 @@ from scapy.all import (
 	conf
 )
 from scapy.layers.inet import _IPOption_HDR
+import socket
 
 received_packets = 0
 flow_finished = False
@@ -36,6 +37,7 @@ def handle_pkt(pkt):
 	global flow_finished, received_packets
 	# The load is usually the sequence number 
 	load = pkt[UDP].payload.load.decode("UTF-8")
+	print(load)
 	if flow_finished == True:
 		print("delivery rate: " + str(received_packets) + " / " + 
 				str(load) + "  " + str(received_packets/int(load)*100) +"%")

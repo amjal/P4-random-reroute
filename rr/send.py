@@ -21,6 +21,7 @@ from scapy.all import (
 	conf
 )
 from scapy.layers.inet import _IPOption_HDR
+import socket
 
 def get_if():
 	ifs=get_if_list()
@@ -41,7 +42,7 @@ def create_pkts(base_pkt, total_bits, bit_delay):
 	while bits_sent < total_bits:
 		pkt = base_pkt / str(seq_no)
 		packet_size = len(pkt)*8
-		pkt_list.append((pkt, packet_size*bit_delay))
+		pkt_list.append((pkt.build(), packet_size*bit_delay))
 		bits_sent += packet_size
 		seq_no += 1
 	return pkt_list
@@ -54,6 +55,8 @@ def main():
 
 	addr = socket.gethostbyname(sys.argv[1])
 	iface = get_if()
+	sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+	sock.bind((iface, 0))
 
 	base_pkt = Ether(src=get_if_hwaddr(iface), dst="ff:ff:ff:ff:ff:ff") / IP( dst=addr, options = IPOption(copy_flag = 0, optclass=0, option = 31, length = 3, value=0)) / UDP( dport=4321, sport=1234)
 	
@@ -67,12 +70,13 @@ def main():
 	#first create the packets
 	pkt_list = create_pkts(base_pkt, total_bits, bit_delay)
 	# Using a socket for sending will make things way faster	
+	print(len(pkt_list))
 	s = conf.L2socket()
 	sss = time()
 	for pkt, pkt_delay in pkt_list:
 		start = time()
-		#sendp(pkt, iface=iface, verbose=False)
-		s.send(pkt)
+		sock.send(pkt)
+#sendp(pkt, iface=iface, verbose=False)
 		end = time()
 		dur = end - start
 		# dur which is about 0.001s is the time it 
