@@ -59,6 +59,7 @@ def configureP4Switch(**switch_args):
 				kwargs['thrift_port'] = ConfiguredP4Switch.next_thrift_port
 				ConfiguredP4Switch.next_thrift_port += 1
 				P4Switch.__init__(self, *opts, **kwargs)
+				self.describe()
 
 			def describe(self):
 				print("%s -> Thrift port: %d" % (self.name, self.thrift_port))
@@ -264,14 +265,19 @@ class ExerciseRunner:
 			content of the runtime JSON file as input.
 		"""
 		sw_obj = self.net.get(sw_name)
-		grpc_port = sw_obj.grpc_port
+		port  = ''
+		if "grpc" in self.bmv2_exe:
+			port = sw_obj.grpc_port
+		else: 
+		 	port = sw_obj.thrift_port	
+		 	
 		device_id = sw_obj.device_id
 		runtime_json = sw_dict['runtime_json']
 		self.logger('Configuring switch %s using P4Runtime with file %s' % (sw_name, runtime_json))
 		with open(runtime_json, 'r') as sw_conf_file:
 			outfile = '%s/%s-p4runtime-requests.txt' %(self.log_dir, sw_name)
 			p4runtime_lib.simple_controller.program_switch(
-				addr='127.0.0.1:%d' % grpc_port,
+				addr='127.0.0.1:%d' % port,
 				device_id=device_id,
 				sw_conf_file=sw_conf_file,
 				workdir=os.getcwd(),

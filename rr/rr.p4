@@ -5,6 +5,7 @@
 
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_ARP = 0x0806;
+const bit<16> TYPE_IPV6 = 0x86dd;
 const bit<32> WEAK_THRESHOLD = 30;
 const bit<5> IPV4_OPTION_RR = 31;
 const bit<8> MAX_HOP = 12;
@@ -18,6 +19,9 @@ const bit<8> MAX_HOP = 12;
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
 typedef bit<32> ip4Addr_t;
+
+typedef bit<32> PktCount_t;
+register<PktCount_t>(4) approx_queue_depth_pkts;
 
 
 // Define global register accessible by both ingress and egress controls
@@ -122,6 +126,7 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+	PktCount_t tmp_count;
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -129,7 +134,9 @@ control MyIngress(inout headers hdr,
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
 		bit<32> spec_qdepth;
 		egressSpec_t randomPort;
-		qdepths.read(spec_qdepth, (bit<32>) port -1);
+		bit<32> output_port = (bit<32>)port -1;
+		qdepths.read(spec_qdepth, output_port);
+		log_msg("Value read from register = {} index = {}", {spec_qdepth, port -1});
 		random<bit<9>>(randomPort, 1, MAX_PORTS);
 		if (spec_qdepth > WEAK_THRESHOLD){
 			// Do random rerouting
@@ -186,6 +193,13 @@ control MyIngress(inout headers hdr,
 			ipv4_lpm.apply();
 		else if (hdr.ethernet.etherType == TYPE_ARP)
 			mac_lookup.apply();
+		// Drop IPv6 packets
+		else if (hdr.ethernet.etherType == TYPE_IPV6)
+			drop();
+		bit<32> output_port = (bit<32>)standard_metadata.egress_spec - 1;
+		tmp_count = tmp_count + 1;
+		approx_queue_depth_pkts.write(output_port, tmp_count);
+
     }
 }
 
@@ -196,9 +210,14 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
+	PktCount_t tmp_count;
     apply {
-		qdepths.write((bit<32>)standard_metadata.egress_port -1, (bit<32>)standard_metadata.enq_qdepth);
-
+		bit<32> index = (bit<32>)standard_metadata.egress_port -1;	
+		qdepths.write(index, (bit<32>)standard_metadata.enq_qdepth);
+		log_msg("Value written to register index {}", {index});
+		approx_queue_depth_pkts.read(tmp_count, index);
+		tmp_count = tmp_count -1;
+		approx_queue_depth_pkts.write(index, tmp_count);
 	}
 }
 

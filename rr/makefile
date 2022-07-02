@@ -1,4 +1,4 @@
-run_script = ../util/run_exercise.py
+run_script = ../util/p4apprunner.py
 TOPO = topology/topology.json
 
 include ../util/makefile
