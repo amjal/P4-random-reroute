@@ -52,7 +52,7 @@ parser.add_argument('--manifest', '-m', help='Path to manifest file',
 parser.add_argument('--target', '-t', help='Target in manifest file to run',
 					type=str, action="store", default = "custom")
 parser.add_argument('--log-dir', '-l', help='Location to save output to',
-					type=str, action="store", default = "/tmp/p4app_logs/")
+					type=str, action="store", default = "logs")
 
 
 args = parser.parse_args()
@@ -165,30 +165,22 @@ def main():
 	controller.start()
 
 	'''
-	if controller: controller.start()
-
-
 	for h in net.hosts:
 		h.describe()
+	'''
 
-	if args.cli or ('cli' in conf and conf['cli']):
-		CLI(net)
+	CLI(net)
 
+	'''
 	proc_runner = AppProcRunner(manifest=manifest, target=args.target,
 									topo=topo, net=net, log_dir=args.log_dir)
-
 	proc_runner.runall()
-
-	if controller: controller.stop()
-
-#This is the line that makes the mininet simulation stop. 
-	net.stop()
+	'''
 
 	if pcap_dump:
 		os.system('bash -c "cp *.pcap \'%s\'"' % args.log_dir)
 
 	if proc_runner.hadError(): sys.exit(1)
-	'''
 
 if __name__ == '__main__':
 	setLogLevel( 'info' )

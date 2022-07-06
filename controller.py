@@ -5,7 +5,7 @@
 # Embedded file name: /home/p4/randomReroute.p4app/controller.py
 # Compiled at: 2022-07-04 20:15:10
 # Size of source mod 2**32: 1201 bytes
-import json, os, p4runtime_lib.simple_controller
+import json, os, simple_controller
 
 class CustomAppController:
 
@@ -30,8 +30,9 @@ class CustomAppController:
 		runtime_json = sw_dict['runtime_json']
 		with open(runtime_json, 'r') as sw_conf_file:
 			outfile = '%s/%s-p4runtime-requests.txt' % (self.log_dir, sw_name)
-			p4runtime_lib.simple_controller.program_switch(
-					addr=("127.0.0.1:"+  str(port)),
+			simple_controller.program_switch(
+					self.cli_path, 
+					thrift_port= port,
 			  		device_id=device_id,
 					sw_conf_file=sw_conf_file,
 					workdir=(os.getcwd()),

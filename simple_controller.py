@@ -20,9 +20,6 @@ import os
 import sys
 import subprocess
 
-from p4.config.v1 import p4info_pb2
-
-from . import bmv2, helper
 
 
 def error(msg):
@@ -90,7 +87,7 @@ def check_switch_conf(sw_conf, workdir):
 			raise ConfException("file does not exist %s" % real_path)
 
 
-def program_switch(addr, thrift_port, cli_path, device_id, sw_conf_file, workdir, proto_dump_fpath, runtime_json):
+def program_switch(cli_path, thrift_port, device_id, sw_conf_file, workdir, proto_dump_fpath, runtime_json):
 	sw_conf = json_load_byteified(sw_conf_file)
 	try:
 		check_switch_conf(sw_conf=sw_conf, workdir=workdir)
@@ -100,53 +97,33 @@ def program_switch(addr, thrift_port, cli_path, device_id, sw_conf_file, workdir
 
 	info('Using P4Info file %s...' % sw_conf['p4info'])
 	p4info_fpath = os.path.join(workdir, sw_conf['p4info'])
-	p4info_helper = helper.P4InfoHelper(p4info_fpath)
 
-	target = sw_conf['target']
+	if 'table_entries' in sw_conf:
+		table_entries = sw_conf['table_entries']
+		info("Inserting %d table entries..." % len(table_entries))
+		for entry in table_entries:
+			command = generate_table_add(entry)
+			runCommand(cli_path, thrift_port, command)
 
-	info("Connecting to P4Runtime server on %s (%s)..." % (addr, target))
+	if 'multicast_group_entries' in sw_conf:
+		group_entries = sw_conf['multicast_group_entries']
+		info("Inserting %d group entries..." % len(group_entries))
+		for entry in group_entries:
+			# First create mcast groups and nodes
+			mgrp_command, mcnd_command = generate_group_entry(entry)
+			runCommand(cli_path, thrift_port, mgrp_command)
+			results = runCommand(cli_path, thrift_port, mcnd_command)
+			# Use the handle to associate mcast group with node
+			node_handle = 0
+			for r in results:
+				if 'handle' in r:
+					node_handle = r.split(' ')[-1]
+			ass_command = generate_associate_cmd(entry, node_handle)
+			runCommand(cli_path, thrift_port, ass_command)
+			
 
-	if target == "bmv2":
-		sw = bmv2.Bmv2SwitchConnection(address=addr, device_id=device_id,
-									   proto_dump_file=proto_dump_fpath)
-	else:
-		raise Exception("Don't know how to connect to target %s" % target)
-
-	try:
-		sw.MasterArbitrationUpdate()
-
-		if target == "bmv2":
-			info("Setting pipeline config (%s)..." % sw_conf['bmv2_json'])
-			bmv2_json_fpath = os.path.join(workdir, sw_conf['bmv2_json'])
-			sw.SetForwardingPipelineConfig(p4info=p4info_helper.p4info,
-										   bmv2_json_file_path=bmv2_json_fpath)
-		else:
-			raise Exception("Should not be here")
-
-		if 'table_entries' in sw_conf:
-			table_entries = sw_conf['table_entries']
-			info("Inserting %d table entries..." % len(table_entries))
-			for entry in table_entries:
-				info(tableEntryToString(entry))
-				validateTableEntry(entry, p4info_helper, runtime_json)
-				insertTableEntry(sw, entry, p4info_helper)
-
-		if 'multicast_group_entries' in sw_conf:
-			group_entries = sw_conf['multicast_group_entries']
-			info("Inserting %d group entries..." % len(group_entries))
-			for entry in group_entries:
-				info(groupEntryToString(entry))
-				insertMulticastGroupEntry(sw, entry, p4info_helper)
-
-		if 'clone_session_entries' in sw_conf:
-			clone_entries = sw_conf['clone_session_entries']
-			info("Inserting %d clone entries..." % len(clone_entries))
-			for entry in clone_entries:
-				info(cloneEntryToString(entry))
-				insertCloneGroupEntry(sw, entry, p4info_helper)
-
-	finally:
-		sw.shutdown()
+	if 'clone_session_entries' in sw_conf:
+		raise Exception('Clone entries have not been implemeted yet')
 
 
 def validateTableEntry(flow, p4info_helper, runtime_json):
@@ -169,23 +146,13 @@ def validateTableEntry(flow, p4info_helper, runtime_json):
 				)
 
 
-def insertTableEntry(sw, flow, p4info_helper):
-	table_name = flow['table']
-	match_fields = flow.get('match') # None if not found
-	action_name = flow['action_name']
-	default_action = flow.get('default_action') # None if not found
-	action_params = flow['action_params']
-	priority = flow.get('priority')  # None if not found
-
-	table_entry = p4info_helper.buildTableEntry(
-		table_name=table_name,
-		match_fields=match_fields,
-		default_action=default_action,
-		action_name=action_name,
-		action_params=action_params,
-		priority=priority)
-
-	sw.WriteTableEntry(table_entry)
+def runCommand(cli_path, thrift_port, command):
+	p = subprocess.Popen([cli_path, '--thrift-port', str(thrift_port)], 
+			stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+	stdout, nosterr = p.communicate(input=bytes(command, 'UTF-8'))
+	raw_results = stdout.split(b'RuntimeCmd:')[1:len(command)+1]
+	final_results = raw_results[0].decode('UTF-8').split('\n')
+	return final_results
 
 
 def json_load_byteified(file_handle):
@@ -210,47 +177,48 @@ def _byteify(data, ignore_dicts=False):
 	return data
 
 
-def tableEntryToString(flow):
-	if 'match' in flow:
-		match_str = ['%s=%s' % (match_name, str(flow['match'][match_name])) for match_name in
-					 flow['match']]
-		match_str = ', '.join(match_str)
-	elif 'default_action' in flow and flow['default_action']:
-		match_str = '(default action)'
-	else:
-		match_str = '(any)'
-	params = ['%s=%s' % (param_name, str(flow['action_params'][param_name])) for param_name in
-			  flow['action_params']]
-	params = ', '.join(params)
-	return "%s: %s => %s(%s)" % (
-		flow['table'], match_str, flow['action_name'], params)
+def generate_table_add(flow):
+	table_name = flow['table']
+	action_name = flow['action_name']
+	match_fields = ''
+	if 'match' in flow: 
+		for match_name in flow['match']:
+			match_fields += str(flow['match'][match_name][0])
+			match_fields += ' '
+	action_params = ''
+	for param_name in flow['action_params']:
+		action_params += str(flow['action_params'][param_name])
+		action_params += ' '
+	
+	if 'default_action' in flow and flow['default_action'] == True:
+		return "table_set_default %s %s %s" % (
+				table_name, action_name, action_params)
+	return "table_add %s %s %s => %s" % (
+			table_name, action_name, match_fields, action_params)
 
 
-def groupEntryToString(rule):
+def generate_group_entry(rule):
 	group_id = rule["multicast_group_id"]
-	replicas = ['%d' % replica["egress_port"] for replica in rule['replicas']]
-	ports_str = ', '.join(replicas)
-	return 'Group {0} => ({1})'.format(group_id, ports_str)
 
-def cloneEntryToString(rule):
-	clone_id = rule["clone_session_id"]
-	if "packet_length_bytes" in rule:
-		packet_length_bytes = str(rule["packet_length_bytes"])+"B"
-	else:
-		packet_length_bytes = "NO_TRUNCATION"
-	replicas = ['%d' % replica["egress_port"] for replica in rule['replicas']]
-	ports_str = ', '.join(replicas)
-	return 'Clone Session {0} => ({1}) ({2})'.format(clone_id, ports_str, packet_length_bytes)
+	mgrp_command = "mc_mgrp_create " + str(group_id)
 
-def insertMulticastGroupEntry(sw, rule, p4info_helper):
-	mc_entry = p4info_helper.buildMulticastGroupEntry(rule["multicast_group_id"], rule['replicas'])
-	sw.WritePREEntry(mc_entry)
+# This is assuming that every multicast group has exactly one node
+	mcnd_command = "mc_node_create " + str(group_id) + " "
 
-def insertCloneGroupEntry(sw, rule, p4info_helper):
-	clone_entry = p4info_helper.buildCloneSessionEntry(rule['clone_session_id'], rule['replicas'],
-													   rule.get('packet_length_bytes', 0))
-	sw.WritePREEntry(clone_entry)
+	for replica in rule['replicas']:
+		mcnd_command += str(replica['egress_port'])
+		mcnd_command += ' '
+	
+	return mgrp_command, mcnd_command
 
+def generate_associate_cmd(rule, node_handle):
+	ass_command = "mc_node_associate "
+	group_id = rule['multicast_group_id']
+	ass_command += str(group_id)
+	ass_command += ' '
+	ass_command += str(node_handle)
+
+	return ass_command
 
 if __name__ == '__main__':
 	main()
