@@ -122,16 +122,6 @@ def main():
 	if 'links' not in conf: conf['links'] = []
 	if 'latencies' not in conf: conf['latencies'] = {}
 
-	conf['latencies'].update(dict((tuple(sorted(l[:2])), formatLatency(l[2])) for l in conf['links'] if len(l)==3))
-	conf['links'] = [l[:2] for l in conf['links']]
-
-	for host_name in sorted(conf['hosts'].keys()):
-		host = conf['hosts'][host_name]
-		if 'latency' not in host: continue
-		for l in conf['links']:
-			if host_name not in l: continue
-			conf['latencies'][tuple(sorted(l))] = formatLatency(host['latency'])
-
 
 	bmv2_log = args.bmv2_log or ('bmv2_log' in conf and conf['bmv2_log'])
 	pcap_dump = args.pcap_dump or ('pcap_dump' in conf and conf['pcap_dump'])
@@ -144,6 +134,7 @@ def main():
 	topo = topo.create_network()
 
 	switchClass = configureP4Switch(
+			enable_debugger=conf['debugger'],
 			sw_path=args.behavioral_exe,
 			json_path=args.json,
 			log_console=bmv2_log,
@@ -178,7 +169,7 @@ def main():
 	CLI(net)
 
 	if pcap_dump:
-		os.system('bash -c "cp *.pcap \'%s\'"' % args.log_dir)
+		os.system('bash -c "mv *.pcap \'%s\'"' % args.log_dir)
 
 	if proc_runner.hadError(): sys.exit(1)
 

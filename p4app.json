@@ -9,7 +9,8 @@
 			"controller_module": "controller",
 			"procrunner_module": "procrunner",
 			"bmv2_log": true,
-			"pcap_dump": true
+			"pcap_dump": true,
+			"debugger": true
 		}
 	}
 }

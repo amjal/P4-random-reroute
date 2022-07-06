@@ -39,7 +39,7 @@ class CustomTopo(Topo):
 			self.addLink(sw1_name, sw2_name, port1=sw1_port,
 			  port2=sw2_port,
 			  delay=(link['latency']),
-			  b2=(link['bandwidth']))
+			  bw=(link['bandwidth']))
 
 	def parse_switch_node(self, node):
 		assert (len(node.split('-')) == 2)
