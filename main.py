@@ -167,11 +167,11 @@ def main():
 	proc_runner.program_hosts()
 
 	CLI(net)
+	net.stop()
+
 
 	if pcap_dump:
 		os.system('bash -c "mv *.pcap \'%s\'"' % args.log_dir)
-
-	if proc_runner.hadError(): sys.exit(1)
 
 if __name__ == '__main__':
 	setLogLevel( 'info' )
