@@ -169,13 +169,13 @@ def main():
 		h.describe()
 	'''
 
-	CLI(net)
 
-	'''
-	proc_runner = AppProcRunner(manifest=manifest, target=args.target,
-									topo=topo, net=net, log_dir=args.log_dir)
-	proc_runner.runall()
-	'''
+	proc_runner = AppProcRunner(net, 
+			manifest=manifest, target=args.target)
+									
+	proc_runner.program_hosts()
+
+	CLI(net)
 
 	if pcap_dump:
 		os.system('bash -c "cp *.pcap \'%s\'"' % args.log_dir)
