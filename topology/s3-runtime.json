@@ -1,0 +1,106 @@
+{
+	"target": "bmv2",
+	"p4info": "build/rr.p4.p4info.txt",
+	"bmv2_json": "build/rr.json",
+	"table_entries": [
+	{
+		"table": "MyIngress.ipv4_lpm",
+		"default_action": true,
+		"action_name": "MyIngress.drop",
+		"action_params": {}
+	},
+	{
+		"table": "MyIngress.ipv4_lpm",
+		"match": {
+			"hdr.ipv4.dstAddr": ["10.0.3.3", 32]
+		},
+		"action_name": "MyIngress.ipv4_forward",
+		"action_params": {
+			"dstAddr": "08:00:00:00:03:03",
+			"port": 1
+		}
+	},
+	{
+		"table": "MyIngress.ipv4_lpm",
+		"match": {
+			"hdr.ipv4.dstAddr": ["10.0.3.33", 32]
+		},
+		"action_name": "MyIngress.ipv4_forward",
+		"action_params": {
+			"dstAddr": "08:00:00:00:03:33",
+			"port": 4
+		}
+	},
+	{
+		"table": "MyIngress.ipv4_lpm",
+		"match":{
+			"hdr.ipv4.dstAddr": ["10.0.1.0", 24]
+		},
+		"action_name": "MyIngress.ipv4_forward",
+		"action_params":{
+			"dstAddr": "08:00:00:00:01:00",
+			"port": 2
+		}
+	},
+	{
+		"table": "MyIngress.ipv4_lpm",
+		"match":{
+			"hdr.ipv4.dstAddr": ["10.0.2.0", 24]
+		},
+		"action_name": "MyIngress.ipv4_forward",
+		"action_params": {
+			"dstAddr": "08:00:00:00:02:00",
+			"port": 3
+		}
+	},
+	{
+		"table": "MyIngress.mac_lookup",
+		"match":{
+			"hdr.ethernet.dstAddr": ["08:00:00:00:03:03"]
+		},
+		"action_name": "MyIngress.mac_forward",
+		"action_params": {
+			"port": 1
+		}
+	},
+	{
+		"table": "MyIngress.mac_lookup",
+		"match":{
+			"hdr.ethernet.dstAddr": ["08:00:00:00:03:33"]
+		},
+		"action_name": "MyIngress.mac_forward",
+		"action_params": {
+			"port": 4
+		}
+	},
+	{
+		"table": "MyIngress.mac_lookup",
+		"match":{
+			"hdr.ethernet.dstAddr": ["ff:ff:ff:ff:ff:ff"]
+		},
+		"action_name": "MyIngress.mac_multicast",
+		"action_params": {
+		}
+	}
+	],
+	"multicast_group_entries":[
+	{
+		"multicast_group_id": 1,
+		"replicas": [
+		{
+			"egress_port": 4,
+			"instance": 1
+		}
+		]
+	},
+	{
+		"multicast_group_id": 4,
+		"replicas": [
+		{
+			"egress_port": 1,
+			"instance": 1
+		}
+		]
+	}
+	]
+}
