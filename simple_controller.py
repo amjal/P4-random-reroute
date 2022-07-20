@@ -125,6 +125,12 @@ def program_switch(cli_path, thrift_port, device_id, sw_conf_file, workdir, prot
 	if 'clone_session_entries' in sw_conf:
 		raise Exception('Clone entries have not been implemeted yet')
 
+	# Set queue rate and queue depths
+	command = "set_queue_rate 25"
+	runCommand(cli_path, thrift_port, command)
+	command = "set_queue_depth 64"
+	runCommand(cli_path, thrift_port, command)
+
 
 def validateTableEntry(flow, p4info_helper, runtime_json):
 	table_name = flow['table']
